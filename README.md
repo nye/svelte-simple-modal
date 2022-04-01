@@ -1,3 +1,13 @@
+
+<br/><br/>
+
+<p>This is just a fork of Fritz Lekschas's <a href="https://github.com/flekschas/svelte-simple-modal">svelte-simple-modal</a>.<br>I made some changes just for my personal projects.</p>
+
+<br/><br/>
+
+<hr>
+
+
 <h1 align="center">
   svelte-simple-modal
 </h1>
