@@ -20,6 +20,7 @@
   import * as svelte from 'svelte';
   import { fade } from 'svelte/transition';
   import { createEventDispatcher } from 'svelte';
+  import Spinner from "$lib/Spinner.svelte";
 
   const dispatch = createEventDispatcher();
 
@@ -35,7 +36,7 @@
    * Svelte context key to reference the simple modal context
    * @type {string}
    */
-  export let key = 'simple-modal';
+  export let key = 'modal';
 
   /**
    * Accessibility label of the modal
@@ -136,11 +137,6 @@
   export let unstyled = false;
 
   /**
-   * The setContext() function associated with this library
-   * @description If you want to bundle simple-modal with its own version of
-   * Svelte you have to pass `setContext()` from your main app to simple-modal
-   * using this parameter
-   * @see https://svelte.dev/docs#run-time-svelte-setcontext
    * @type {(key: any, context: any) => void}
    */
   export let setContext = baseSetContext;
@@ -219,6 +215,7 @@
   let prevBodyOverflow;
   let prevBodyWidth;
   let outerClickTarget;
+  let loading = false;
 
   const camelCaseToDash = (str) =>
     str.replace(/([a-zA-Z])(?=[A-Z])/g, '$1-').toLowerCase();
@@ -226,9 +223,9 @@
   const toCssString = (props) =>
     props
       ? Object.keys(props).reduce(
-          (str, key) => `${str}; ${camelCaseToDash(key)}: ${props[key]}`,
-          ''
-        )
+        (str, key) => `${str}; ${camelCaseToDash(key)}: ${props[key]}`,
+        ''
+      )
       : '';
 
   const isFunction = (f) => !!(f && f.constructor && f.call && f.apply);
@@ -258,7 +255,13 @@
   let onOpened = toVoid;
   let onClosed = toVoid;
 
-  const open = (NewComponent, newProps = {}, options = {}, callback = {}) => {
+  const changeModalContent = (NewComponent, newProps = {}, options = {}) => {
+    Component = bind(NewComponent, newProps);
+    state = { ...defaultState, ...options };
+    updateStyleTransition();
+  };
+
+  const openModal = (NewComponent, newProps = {}, options = {}, callback = {}) => {
     Component = bind(NewComponent, newProps);
     state = { ...defaultState, ...options };
     updateStyleTransition();
@@ -309,7 +312,7 @@
     };
   };
 
-  const close = (callback = {}) => {
+  const closeModal = (callback = {}) => {
     if (!Component) return;
     onClose = callback.onClose || onClose;
     onClosed = callback.onClosed || onClosed;
@@ -317,10 +320,14 @@
     enableScroll();
   };
 
+  const isLoading = (value = true) => {
+    loading = value;
+  };
+
   const handleKeydown = (event) => {
     if (state.closeOnEsc && Component && event.key === 'Escape') {
       event.preventDefault();
-      close();
+      closeModal();
     }
 
     if (Component && event.key === 'Tab' && !state.disableFocusTrap) {
@@ -350,7 +357,7 @@
   const handleOuterMouseup = (event) => {
     if (state.closeOnOuterClick && event.target === outerClickTarget) {
       event.preventDefault();
-      close();
+      closeModal();
     }
   };
 
@@ -373,22 +380,22 @@
     window.scrollTo(0, scrollY);
   };
 
-  setContext(key, { open, close });
+  setContext(key, { openModal, closeModal, isLoading, changeModalContent });
 
   let isMounted = false;
 
   $: {
     if (isMounted) {
       if (isFunction(show)) {
-        open(show);
+        openModal(show);
       } else {
-        close();
+        closeModal();
       }
     }
   }
 
   svelte.onDestroy(() => {
-    if (isMounted) close();
+    if (isMounted) closeModal();
   });
 
   svelte.onMount(() => {
@@ -417,6 +424,7 @@
       <div
         class={state.classWindow}
         class:window={!unstyled}
+        class:is-loading={loading}
         role="dialog"
         aria-modal="true"
         aria-label={state.ariaLabelledBy ? null : state.ariaLabel || null}
@@ -429,17 +437,21 @@
         on:outroend={onClosed}
         style={cssWindow}
       >
+        {#if loading}<div class="loading"></div><div class="loading" transition:fade><Spinner width="40" /></div>{/if}
         {#if state.closeButton}
           {#if isFunction(state.closeButton)}
-            <svelte:component this={state.closeButton} onClose={close} />
+            <svelte:component this={state.closeButton} onClose={closeModal} />
           {:else}
             <button
               class={state.classCloseButton}
               class:close={!unstyled}
               aria-label="Close modal"
-              on:click={close}
-              style={cssCloseButton}
-            />
+              on:click={closeModal}
+              style={cssCloseButton}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13.6686 1.41L12.292 0L6.83432 5.59L1.37663 0L0 1.41L5.45769 7L0 12.59L1.37663 14L6.83432 8.41L12.292 14L13.6686 12.59L8.21095 7L13.6686 1.41Z" fill="#787777" fill-opacity="0.59"/>
+              </svg>
+            </button>
           {/if}
         {/if}
         <div
@@ -470,12 +482,13 @@
     justify-content: center;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.66);
+    background: rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(2px);
   }
 
   .wrap {
     position: relative;
-    margin: 2rem;
+    margin: 1rem;
     max-height: 100%;
   }
 
@@ -486,15 +499,32 @@
     max-height: 100%;
     margin: 2rem auto;
     color: black;
-    border-radius: 0.5rem;
-    background: white;
+    border-radius: 10px;
+    background: var(--bs-light);
+    filter: drop-shadow(0px 4px 10px rgba(0, 0, 0, 0.25));
+  }
+
+  .loading{
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:  rgba(245, 248, 250, .4);
+    backdrop-filter: blur(2px);
+    color: var(--primary);
+    z-index: 600;
   }
 
   .content {
     position: relative;
-    padding: 1rem;
+    padding: 3.3rem 1rem 1rem 1rem;
     max-height: calc(100vh - 4rem);
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .close {
@@ -502,73 +532,17 @@
     box-sizing: border-box;
     position: absolute;
     z-index: 1000;
-    top: 1rem;
-    right: 1rem;
+    top: 10px;
+    right: 10px;
     margin: 0;
     padding: 0;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 30px;
+    height: 30px;
     border: 0;
+    background: transparent;
     color: black;
-    border-radius: 1.5rem;
-    background: white;
-    box-shadow: 0 0 0 1px black;
     transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-      background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+    background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     -webkit-appearance: none;
-  }
-
-  .close:before,
-  .close:after {
-    content: '';
-    display: block;
-    box-sizing: border-box;
-    position: absolute;
-    top: 50%;
-    width: 1rem;
-    height: 1px;
-    background: black;
-    transform-origin: center;
-    transition: height 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
-      background 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-  }
-
-  .close:before {
-    -webkit-transform: translate(0, -50%) rotate(45deg);
-    -moz-transform: translate(0, -50%) rotate(45deg);
-    transform: translate(0, -50%) rotate(45deg);
-    left: 0.25rem;
-  }
-
-  .close:after {
-    -webkit-transform: translate(0, -50%) rotate(-45deg);
-    -moz-transform: translate(0, -50%) rotate(-45deg);
-    transform: translate(0, -50%) rotate(-45deg);
-    left: 0.25rem;
-  }
-
-  .close:hover {
-    background: black;
-  }
-
-  .close:hover:before,
-  .close:hover:after {
-    height: 2px;
-    background: white;
-  }
-
-  .close:focus {
-    border-color: #3399ff;
-    box-shadow: 0 0 0 2px #3399ff;
-  }
-
-  .close:active {
-    transform: scale(0.9);
-  }
-
-  .close:hover,
-  .close:focus,
-  .close:active {
-    outline: none;
   }
 </style>
